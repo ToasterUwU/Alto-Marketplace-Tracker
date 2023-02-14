@@ -1,0 +1,9 @@
+{
+  "MARKETPLACE_BASE_URL": "https://alto.build/collections",
+  "UPDATE_LOOP_MINUTES": 15,
+  "SELECTORS": {
+    "ACTIVITY_TAB": "//*[@id='__next']/div/div[2]/div[2]/div[2]/div[2]",
+    "ACTIVITY_TABLE": "//*[@id='__next']/div/div[2]/div[2]/div[3]/div[2]/div/div[2]/div[2]"
+  },
+  "ALLOWED_GUILD_IDS": []
+}
