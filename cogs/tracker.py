@@ -188,7 +188,7 @@ class Tracker(commands.Cog):
 
     @tasks.loop(minutes=CONFIG["ALTO_TRACKER"]["UPDATE_LOOP_MINUTES"])
     async def update_data(self):
-        for collection_name in self.event_log_listeners:
+        for collection_name in self.event_log_listeners.copy():
             known_events = self.collection_events[collection_name].copy()
 
             new_events = await self.get_new_events(collection_name, known_events)
