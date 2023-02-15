@@ -300,7 +300,7 @@ class Tracker(commands.Cog):
             return
 
         CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"].append(guild_id)
-        CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"].save()
+        CONFIG.save()
 
         await interaction.send("Done, added this Guild to the allow list.")
 
@@ -320,7 +320,7 @@ class Tracker(commands.Cog):
             return
 
         CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"].remove(guild_id)
-        CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"].save()
+        CONFIG.save()
 
         await interaction.send("Done, removed this Guild from the allow list.")
 
