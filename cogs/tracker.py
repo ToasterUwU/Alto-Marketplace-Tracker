@@ -291,6 +291,8 @@ class Tracker(commands.Cog):
         guild_ids=CONFIG["GENERAL"]["OWNER_COG_GUILD_IDS"],
     )
     async def add_allowed_guild(self, interaction: nextcord.Interaction, guild_id: str):
+        await interaction.response.defer()
+
         guild_id = int(guild_id)  # type: ignore
 
         if guild_id in CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"]:
@@ -309,6 +311,8 @@ class Tracker(commands.Cog):
     async def remove_allowed_guild(
         self, interaction: nextcord.Interaction, guild_id: str
     ):
+        await interaction.response.defer()
+
         guild_id = int(guild_id)  # type: ignore
 
         if guild_id not in CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"]:
