@@ -140,12 +140,15 @@ class Tracker(commands.Cog):
         known_events: List[Dict[str, Union[str, None]]] = [],
     ):
         loop = asyncio.get_running_loop()
-        new_events = await loop.run_in_executor(
-            None,
-            self._scrape_data,
-            CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "/" + collection_name,
-            known_events,
-        )
+        try:
+            new_events = await loop.run_in_executor(
+                None,
+                self._scrape_data,
+                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "/" + collection_name,
+                known_events,
+            )
+        except:
+            new_events = []
 
         return new_events
 
