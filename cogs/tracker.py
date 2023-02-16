@@ -50,7 +50,7 @@ class Tracker(commands.Cog):
     ):
         new_data = []
 
-        driver = uc.Chrome(browser_executable_path="brave-browser")
+        driver = uc.Chrome(browser_executable_path="brave-browser", headless=True)
 
         driver.get(url)
         time.sleep(2)
@@ -277,11 +277,11 @@ class Tracker(commands.Cog):
     ):
         collection_name = collection_link.rsplit("/", 1)[1]
 
-        if collection_name not in self.event_log_listeners:
+        if interaction.guild_id not in self.event_log_listeners[collection_name]:
             await interaction.send("You arent tracking this collection anyways.")
             return
 
-        del self.event_log_listeners[collection_name]
+        del self.event_log_listeners[collection_name][interaction.guild_id]
         if self.event_log_listeners[collection_name] == {}:
             del self.event_log_listeners[collection_name]
 
