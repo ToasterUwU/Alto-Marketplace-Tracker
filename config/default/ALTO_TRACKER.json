@@ -1,5 +1,5 @@
 {
-  "MARKETPLACE_BASE_URL": "https://alto.build/collections",
+  "MARKETPLACE_BASE_URL": "https://alto.build/",
   "UPDATE_LOOP_MINUTES": 15,
   "SELECTORS": {
     "ACTIVITY_TAB": "//*[@id='__next']/div/div[2]/div[2]/div[2]/div[2]",

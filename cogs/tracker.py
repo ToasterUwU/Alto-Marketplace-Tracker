@@ -19,7 +19,11 @@ class Tracker(commands.Cog):
         self.collection_events = JsonDictSaver(
             "collection_events", auto_convert_data=False
         )
-        self.event_log_listeners = JsonDictSaver("event_log_listeners")
+        self.collection_event_log_listeners = JsonDictSaver(
+            "collection_event_log_listeners"
+        )
+        self.wallet_events = JsonDictSaver("wallet_events", auto_convert_data=False)
+        self.wallet_event_log_listeners = JsonDictSaver("wallet_event_log_listeners")
 
         self.update_data.start()
 
@@ -134,7 +138,7 @@ class Tracker(commands.Cog):
 
         return new_data
 
-    async def get_new_events(
+    async def get_new_collection_events(
         self,
         collection_name: str,
         known_events: List[Dict[str, Union[str, None]]] = [],
@@ -144,7 +148,9 @@ class Tracker(commands.Cog):
             new_events = await loop.run_in_executor(
                 None,
                 self._scrape_data,
-                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "/" + collection_name,
+                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"]
+                + "collections/"
+                + collection_name,
                 known_events,
             )
         except:
@@ -152,12 +158,32 @@ class Tracker(commands.Cog):
 
         return new_events
 
-    async def log_events(
+    async def get_new_wallet_events(
+        self,
+        wallet: str,
+        known_events: List[Dict[str, Union[str, None]]] = [],
+    ):
+        loop = asyncio.get_running_loop()
+        try:
+            new_events = await loop.run_in_executor(
+                None,
+                self._scrape_data,
+                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "profile/" + wallet,
+                known_events,
+            )
+        except:
+            new_events = []
+
+        return new_events
+
+    async def log_collection_events(
         self,
         collection_name: str,
         events: List[Dict[str, Union[str, None]]],
     ):
-        for _, webhook_url in self.event_log_listeners[collection_name].items():
+        for _, webhook_url in self.collection_event_log_listeners[
+            collection_name
+        ].items():
             async with aiohttp.ClientSession() as session:
                 try:
                     webhook = nextcord.Webhook.from_url(webhook_url, session=session)
@@ -187,17 +213,58 @@ class Tracker(commands.Cog):
                         fields=fields,
                         thumbnail_url=event["PREVIEW_IMAGE_URL"],
                     )
-                    await webhook.send(embed=embed, username=self.bot.user.name, avatar_url=self.bot.user.avatar.url)  # type: ignore
+                    await webhook.send(embed=embed, username=self.bot.user.name, avatar_url=self.bot.user.display_avatar.url)  # type: ignore
+
+    async def log_wallet_events(
+        self,
+        wallet: str,
+        events: List[Dict[str, Union[str, None]]],
+    ):
+        for _, webhook_url in self.wallet_event_log_listeners[
+            wallet
+        ].items():
+            async with aiohttp.ClientSession() as session:
+                try:
+                    webhook = nextcord.Webhook.from_url(webhook_url, session=session)
+                except:
+                    continue
+
+                for event in events:
+                    fields = {"Wallet tracked": wallet}
+
+                    if event["PRICE"] != None:
+                        fields["Price"] = f"{event['PRICE']} CANTO"
+
+                    if event["FROM_ADDRESS"] != None:
+                        fields[
+                            "From Address"
+                        ] = f"[{event['FROM_ADDRESS']}]({event['FROM_ADDRESS_URL']})"
+
+                    if event["TO_ADDRESS"] != None:
+                        fields[
+                            "To Address"
+                        ] = f"[{event['TO_ADDRESS']}]({event['TO_ADDRESS_URL']})"
+
+                    fields["Alto URL to Token"] = f"[Link]({event['TOKEN_URL']})"
+
+                    embed = fancy_embed(
+                        title=str(event["EVENT_TYPE"]),
+                        fields=fields,
+                        thumbnail_url=event["PREVIEW_IMAGE_URL"],
+                    )
+                    await webhook.send(embed=embed, username=self.bot.user.name, avatar_url=self.bot.user.display_avatar.url)  # type: ignore
 
     @tasks.loop(minutes=CONFIG["ALTO_TRACKER"]["UPDATE_LOOP_MINUTES"])
     async def update_data(self):
-        for collection_name in self.event_log_listeners.copy():
+        for collection_name in self.collection_event_log_listeners.copy():
             known_events = self.collection_events[collection_name].copy()
 
-            new_events = await self.get_new_events(collection_name, known_events)
+            new_events = await self.get_new_collection_events(
+                collection_name, known_events
+            )
 
             try:
-                await self.log_events(collection_name, new_events)
+                await self.log_collection_events(collection_name, new_events)
             except:
                 pass
 
@@ -205,6 +272,21 @@ class Tracker(commands.Cog):
 
             self.collection_events[collection_name] = known_events
             self.collection_events.save()
+
+        for wallet in self.wallet_event_log_listeners.copy():
+            known_events = self.wallet_events[wallet].copy()
+
+            new_events = await self.get_new_wallet_events(wallet, known_events)
+
+            try:
+                await self.log_wallet_events(wallet, new_events)
+            except:
+                pass
+
+            known_events.extend(new_events)
+
+            self.wallet_events[wallet] = known_events
+            self.wallet_events.save()
 
     @nextcord.slash_command(
         "add-collection",
@@ -234,7 +316,7 @@ class Tracker(commands.Cog):
         collection_name = collection_link.rsplit("/", 1)[1]
 
         try:
-            initial_events = await self.get_new_events(collection_name)
+            initial_events = await self.get_new_collection_events(collection_name)
         except:
             await interaction.send("You provided an invalid link for the collection.")
             return
@@ -249,17 +331,76 @@ class Tracker(commands.Cog):
                 await interaction.send("You provided an invalid Webhook URL.")
                 return
 
-        if collection_name not in self.event_log_listeners:
-            self.event_log_listeners[collection_name] = {}
-            self.event_log_listeners.save()
+        if collection_name not in self.collection_event_log_listeners:
+            self.collection_event_log_listeners[collection_name] = {}
+            self.collection_event_log_listeners.save()
 
-        self.event_log_listeners[collection_name][interaction.guild_id] = webhook_url
-        self.event_log_listeners.save()
+        self.collection_event_log_listeners[collection_name][
+            interaction.guild_id
+        ] = webhook_url
+        self.collection_event_log_listeners.save()
 
         self.collection_events[collection_name] = initial_events
         self.collection_events.save()
 
         await interaction.send(f"Logger is set up for: {collection_link}")
+
+    @nextcord.slash_command(
+        "add-wallet",
+        description="Add a wallet the Bot should track.",
+        dm_permission=False,
+        default_member_permissions=nextcord.Permissions(manage_messages=True),
+    )
+    async def add_wallet(
+        self,
+        interaction: nextcord.Interaction,
+        wallet_link: str = nextcord.SlashOption(
+            name="wallet-link",
+            description="The link to the wallet to track on Alto.",
+        ),
+        webhook_url: str = nextcord.SlashOption(
+            name="webhook-url", description="URL of the Webhook to use for Alto Events."
+        ),
+    ):
+        if interaction.guild_id not in CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"]:
+            await interaction.send(
+                "You have not paid for this Service.\nSend my Creator a Message and make a deal with her.\n\nHer Discord: Aki ToasterUwU#0001"
+            )
+            return
+
+        await interaction.response.defer()
+
+        wallet = wallet_link.rsplit("/", 1)[1]
+
+        try:
+            initial_events = await self.get_new_wallet_events(wallet)
+        except:
+            await interaction.send("You provided an invalid link for the profile.")
+            return
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                webhook = nextcord.Webhook.from_url(webhook_url, session=session)
+                await webhook.send(
+                    embed=fancy_embed("Testing", description="Testing the Webhook"), username=self.bot.user.name, avatar_url=self.bot.user.display_avatar.url  # type: ignore
+                )
+            except:
+                await interaction.send("You provided an invalid Webhook URL.")
+                return
+
+        if wallet not in self.wallet_event_log_listeners:
+            self.wallet_event_log_listeners[wallet] = {}
+            self.wallet_event_log_listeners.save()
+
+        self.wallet_event_log_listeners[wallet][
+            interaction.guild_id
+        ] = webhook_url
+        self.wallet_event_log_listeners.save()
+
+        self.wallet_events[wallet] = initial_events
+        self.wallet_events.save()
+
+        await interaction.send(f"Logger is set up for: {wallet_link}")
 
     @nextcord.slash_command(
         "remove-collection",
@@ -277,15 +418,49 @@ class Tracker(commands.Cog):
     ):
         collection_name = collection_link.rsplit("/", 1)[1]
 
-        if interaction.guild_id not in self.event_log_listeners[collection_name]:
+        if (
+            interaction.guild_id
+            not in self.collection_event_log_listeners[collection_name]
+        ):
             await interaction.send("You arent tracking this collection anyways.")
             return
 
-        del self.event_log_listeners[collection_name][interaction.guild_id]
-        if self.event_log_listeners[collection_name] == {}:
-            del self.event_log_listeners[collection_name]
+        del self.collection_event_log_listeners[collection_name][interaction.guild_id]
+        if self.collection_event_log_listeners[collection_name] == {}:
+            del self.collection_event_log_listeners[collection_name]
 
-        self.event_log_listeners.save()
+        self.collection_event_log_listeners.save()
+
+        await interaction.send("You wont get messages about this Collection anymore.")
+
+    @nextcord.slash_command(
+        "remove-wallet",
+        description="Stop tracking a wallet.",
+        dm_permission=False,
+        default_member_permissions=nextcord.Permissions(manage_messages=True),
+    )
+    async def remove_wallet(
+        self,
+        interaction: nextcord.Interaction,
+        wallet_link: str = nextcord.SlashOption(
+            name="wallet-link",
+            description="The link to the wallet on Alto.",
+        ),
+    ):
+        wallet = wallet_link.rsplit("/", 1)[1]
+
+        if (
+            interaction.guild_id
+            not in self.wallet_event_log_listeners[wallet]
+        ):
+            await interaction.send("You arent tracking this wallet anyways.")
+            return
+
+        del self.wallet_event_log_listeners[wallet][interaction.guild_id]
+        if self.wallet_event_log_listeners[wallet] == {}:
+            del self.wallet_event_log_listeners[wallet]
+
+        self.wallet_event_log_listeners.save()
 
         await interaction.send("You wont get messages about this Collection anymore.")
 
