@@ -1,11 +1,12 @@
 import datetime
 from typing import List, Optional, Union
 
+import aiohttp
 import nextcord
 
 from internal_tools.configuration import CONFIG
 
-__all__ = ["fancy_embed", "GetOrFetch", "CatalogView"]
+__all__ = ["log_error_in_discord", "fancy_embed", "GetOrFetch", "CatalogView"]
 
 
 def CONFIG_EMBED_COLOR():
@@ -13,6 +14,17 @@ def CONFIG_EMBED_COLOR():
     Function to give color from the config back
     """
     return nextcord.Colour(int(CONFIG["GENERAL"]["EMBED_COLOR"].replace("#", ""), 16))
+
+
+async def log_error_in_discord(exception: Exception):
+    if CONFIG["GENERAL"]["ERROR_WEBHOOK_URL"]:
+        async with aiohttp.ClientSession() as session:
+            webhook = nextcord.Webhook.from_url(
+                CONFIG["GENERAL"]["ERROR_WEBHOOK_URL"], session=session
+            )
+
+            text = "".join(traceback.format_exception(type(exception), exception, exception.__traceback__))  # type: ignore
+            await webhook.send(f"Unpredicted Error:\n```\n{text}\n```")
 
 
 class CatalogView(nextcord.ui.View):

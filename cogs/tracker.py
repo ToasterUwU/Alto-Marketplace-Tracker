@@ -52,91 +52,98 @@ class Tracker(commands.Cog):
     def _scrape_data(
         self, url: str, known_entries: List[Dict[str, Union[str, None]]] = []
     ):
-        new_data = []
+        new_data: List[Dict[str, str | None]] = []
+        error = None
 
         driver = uc.Chrome(browser_executable_path="brave-browser", headless=True)
+        try:
 
-        driver.get(url)
-        time.sleep(2)
+            driver.get(url)
+            time.sleep(2)
 
-        driver.find_element(
-            By.XPATH, CONFIG["ALTO_TRACKER"]["SELECTORS"]["ACTIVITY_TAB"]
-        ).click()
-        time.sleep(3)
+            driver.find_element(
+                By.XPATH, CONFIG["ALTO_TRACKER"]["SELECTORS"]["ACTIVITY_TAB"]
+            ).click()
+            time.sleep(3)
 
-        table = driver.find_element(
-            By.XPATH, CONFIG["ALTO_TRACKER"]["SELECTORS"]["ACTIVITY_TABLE"]
-        )
-        for entry in reversed(table.find_elements(By.XPATH, "./*")):
-            entry_data_raw = entry.find_elements(By.XPATH, "./*")
-            entry_data = {}
+            table = driver.find_element(
+                By.XPATH, CONFIG["ALTO_TRACKER"]["SELECTORS"]["ACTIVITY_TABLE"]
+            )
+            for entry in reversed(table.find_elements(By.XPATH, "./*")):
+                entry_data_raw = entry.find_elements(By.XPATH, "./*")
+                entry_data = {}
 
-            entry_data["EVENT_TYPE"] = entry_data_raw[0].text
+                entry_data["EVENT_TYPE"] = entry_data_raw[0].text
+
+                try:
+                    entry_data["PREVIEW_IMAGE_URL"] = (
+                        entry_data_raw[1]
+                        .find_element(By.XPATH, ".//img")
+                        .get_attribute("src")
+                    )
+                except:
+                    entry_data["PREVIEW_IMAGE_URL"] = None
+
+                entry_data["TOKEN_ID"] = entry_data_raw[1].text
+
+                entry_data["TOKEN_URL"] = url + "/" + str(entry_data["TOKEN_ID"])
+
+                if entry_data_raw[2].text != "--":
+                    entry_data["PRICE"] = entry_data_raw[2].text.replace("\nCANTO", "")
+                else:
+                    entry_data["PRICE"] = None
+
+                if entry_data_raw[3].text != "--":
+                    entry_data["TO_ADDRESS_URL"] = (
+                        entry_data_raw[3]
+                        .find_element(By.XPATH, "./a")
+                        .get_attribute("href")
+                    )
+                    entry_data["TO_ADDRESS"] = entry_data["TO_ADDRESS_URL"].rsplit(
+                        "/", 1
+                    )[1]
+                else:
+                    entry_data["TO_ADDRESS"] = None
+                    entry_data["TO_ADDRESS_URL"] = None
+
+                if (
+                    entry_data_raw[4].text != "--"
+                    and entry_data_raw[4].text != "null address"
+                ):
+                    entry_data["FROM_ADDRESS_URL"] = (
+                        entry_data_raw[4]
+                        .find_element(By.XPATH, "./a")
+                        .get_attribute("href")
+                    )
+                    entry_data["FROM_ADDRESS"] = entry_data["FROM_ADDRESS_URL"].rsplit(
+                        "/", 1
+                    )[1]
+                else:
+                    entry_data["FROM_ADDRESS"] = None
+                    entry_data["FROM_ADDRESS_URL"] = None
+
+                for known_entry in known_entries:
+                    if self.compare_events(entry_data, known_entry):
+                        break
+                else:
+                    new_data.append(entry_data)
+        except Exception as e:
+            error = e
+
+        finally:
+            try:
+                driver.close()
+            except:
+                pass
 
             try:
-                entry_data["PREVIEW_IMAGE_URL"] = (
-                    entry_data_raw[1]
-                    .find_element(By.XPATH, ".//img")
-                    .get_attribute("src")
-                )
+                driver.quit()
             except:
-                entry_data["PREVIEW_IMAGE_URL"] = None
+                pass
 
-            entry_data["TOKEN_ID"] = entry_data_raw[1].text
+            del driver
 
-            entry_data["TOKEN_URL"] = url + "/" + str(entry_data["TOKEN_ID"])
-
-            if entry_data_raw[2].text != "--":
-                entry_data["PRICE"] = entry_data_raw[2].text.replace("\nCANTO", "")
-            else:
-                entry_data["PRICE"] = None
-
-            if entry_data_raw[3].text != "--":
-                entry_data["TO_ADDRESS_URL"] = (
-                    entry_data_raw[3]
-                    .find_element(By.XPATH, "./a")
-                    .get_attribute("href")
-                )
-                entry_data["TO_ADDRESS"] = entry_data["TO_ADDRESS_URL"].rsplit("/", 1)[
-                    1
-                ]
-            else:
-                entry_data["TO_ADDRESS"] = None
-                entry_data["TO_ADDRESS_URL"] = None
-
-            if (
-                entry_data_raw[4].text != "--"
-                and entry_data_raw[4].text != "null address"
-            ):
-                entry_data["FROM_ADDRESS_URL"] = (
-                    entry_data_raw[4]
-                    .find_element(By.XPATH, "./a")
-                    .get_attribute("href")
-                )
-                entry_data["FROM_ADDRESS"] = entry_data["FROM_ADDRESS_URL"].rsplit(
-                    "/", 1
-                )[1]
-            else:
-                entry_data["FROM_ADDRESS"] = None
-                entry_data["FROM_ADDRESS_URL"] = None
-
-            for known_entry in known_entries:
-                if self.compare_events(entry_data, known_entry):
-                    break
-            else:
-                new_data.append(entry_data)
-
-        try:
-            driver.close()
-        except:
-            pass
-
-        try:
-            driver.quit()
-        except:
-            pass
-
-        return new_data
+            return new_data, error
 
     async def get_new_collection_events(
         self,
@@ -144,17 +151,18 @@ class Tracker(commands.Cog):
         known_events: List[Dict[str, Union[str, None]]] = [],
     ):
         loop = asyncio.get_running_loop()
-        try:
-            new_events = await loop.run_in_executor(
-                None,
-                self._scrape_data,
-                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"]
-                + "collections/"
-                + collection_name,
-                known_events,
-            )
-        except:
-            new_events = []
+
+        new_events, error = await loop.run_in_executor(
+            None,
+            self._scrape_data,
+            CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"]
+            + "collections/"
+            + collection_name,
+            known_events,
+        )
+
+        if error != None:
+            await log_error_in_discord(error)
 
         return new_events
 
@@ -220,9 +228,7 @@ class Tracker(commands.Cog):
         wallet: str,
         events: List[Dict[str, Union[str, None]]],
     ):
-        for _, webhook_url in self.wallet_event_log_listeners[
-            wallet
-        ].items():
+        for _, webhook_url in self.wallet_event_log_listeners[wallet].items():
             async with aiohttp.ClientSession() as session:
                 try:
                     webhook = nextcord.Webhook.from_url(webhook_url, session=session)
@@ -392,9 +398,7 @@ class Tracker(commands.Cog):
             self.wallet_event_log_listeners[wallet] = {}
             self.wallet_event_log_listeners.save()
 
-        self.wallet_event_log_listeners[wallet][
-            interaction.guild_id
-        ] = webhook_url
+        self.wallet_event_log_listeners[wallet][interaction.guild_id] = webhook_url
         self.wallet_event_log_listeners.save()
 
         self.wallet_events[wallet] = initial_events
@@ -449,10 +453,7 @@ class Tracker(commands.Cog):
     ):
         wallet = wallet_link.rsplit("/", 1)[1]
 
-        if (
-            interaction.guild_id
-            not in self.wallet_event_log_listeners[wallet]
-        ):
+        if interaction.guild_id not in self.wallet_event_log_listeners[wallet]:
             await interaction.send("You arent tracking this wallet anyways.")
             return
 
