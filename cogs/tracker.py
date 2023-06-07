@@ -313,7 +313,7 @@ class Tracker(commands.Cog):
     ):
         if interaction.guild_id not in CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"]:
             await interaction.send(
-                "You have not paid for this Service.\nSend my Creator a Message and make a deal with her.\n\nHer Discord: Aki ToasterUwU#0001"
+                "You have not paid for this Service.\nSend my Creator a Message and make a deal with her.\n\nHer Discord: @ToasterUwU"
             )
             return
 
@@ -370,7 +370,7 @@ class Tracker(commands.Cog):
     ):
         if interaction.guild_id not in CONFIG["ALTO_TRACKER"]["ALLOWED_GUILD_IDS"]:
             await interaction.send(
-                "You have not paid for this Service.\nSend my Creator a Message and make a deal with her.\n\nHer Discord: Aki ToasterUwU#0001"
+                "You have not paid for this Service.\nSend my Creator a Message and make a deal with her.\n\nHer Discord: @ToasterUwU"
             )
             return
 
