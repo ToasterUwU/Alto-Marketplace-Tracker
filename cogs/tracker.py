@@ -57,7 +57,6 @@ class Tracker(commands.Cog):
 
         driver = uc.Chrome(browser_executable_path="brave-browser", headless=True)
         try:
-
             driver.get(url)
             time.sleep(2)
 
@@ -99,6 +98,10 @@ class Tracker(commands.Cog):
                         .find_element(By.XPATH, "./a")
                         .get_attribute("href")
                     )
+
+                    if entry_data["TO_ADDRESS_URL"] == None:
+                        raise Exception("Couldnt parse receiving wallet address")
+
                     entry_data["TO_ADDRESS"] = entry_data["TO_ADDRESS_URL"].rsplit(
                         "/", 1
                     )[1]
@@ -115,6 +118,10 @@ class Tracker(commands.Cog):
                         .find_element(By.XPATH, "./a")
                         .get_attribute("href")
                     )
+
+                    if entry_data["FROM_ADDRESS_URL"] == None:
+                        raise Exception("Couldnt parse sending wallet address")
+
                     entry_data["FROM_ADDRESS"] = entry_data["FROM_ADDRESS_URL"].rsplit(
                         "/", 1
                     )[1]
@@ -172,17 +179,14 @@ class Tracker(commands.Cog):
         known_events: List[Dict[str, Union[str, None]]] = [],
     ):
         loop = asyncio.get_running_loop()
-        try:
-            new_events = await loop.run_in_executor(
-                None,
-                self._scrape_data,
-                CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "profile/" + wallet,
-                known_events,
-            )
-        except:
-            new_events = []
+        new_events, error = await loop.run_in_executor(
+            None,
+            self._scrape_data,
+            CONFIG["ALTO_TRACKER"]["MARKETPLACE_BASE_URL"] + "profile/" + wallet,
+            known_events,
+        )
 
-        return new_events
+        return new_events, error
 
     async def log_collection_events(
         self,
@@ -282,7 +286,7 @@ class Tracker(commands.Cog):
         for wallet in self.wallet_event_log_listeners.copy():
             known_events = self.wallet_events[wallet].copy()
 
-            new_events = await self.get_new_wallet_events(wallet, known_events)
+            new_events, error = await self.get_new_wallet_events(wallet, known_events)
 
             try:
                 await self.log_wallet_events(wallet, new_events)
