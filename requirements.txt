@@ -1,4 +1,4 @@
-nextcord[speed, voice]  == 2.6.*
+nextcord[speed, voice]  == 3.0.*
 orjson                  == 3.10.*
 aiohttp                 == 3.11.*
 undetected-chromedriver == 3.5.*
